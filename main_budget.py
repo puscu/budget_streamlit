@@ -3,6 +3,7 @@ import streamlit as st
 import altair as alt
 
 from static_inputs import StaticInputs, InventedInput
+from budget_calculation import BudgetGenerator
 
 ### Main Page of the Budget App ###
 
@@ -36,6 +37,8 @@ st.subheader("Forecast and Strategic Initiatives")
 
 # Getting inputs
 sales_df = invented_inputs.generate_sales()
+print("Printing Sales DF")
+print(sales_df)
 sales_df['Date'] = pd.to_datetime(sales_df[['Year', 'Month']].assign(day=1))
 dim1_selectbox = input_utils.get_dim1(sales_df)
 dim2_selectbox = input_utils.get_dim2(sales_df)
@@ -60,6 +63,16 @@ for i in range(num_choices):
     if i < num_choices - 1:
         st.sidebar.markdown("---")
 
+# Calculating Budget
+budget_generator = BudgetGenerator()
+budget = budget_generator.budget_generator(sales_df, selected_values, num_choices)
+
+# Join with the original sales_df
+sales_df_with_budget = pd.concat([sales_df, budget], axis=0)
+
+print("Printing Sales with Budget")
+print(sales_df_with_budget["Year"].unique().tolist())
+
 # Create two columns
 col1, col2, col3 = st.columns(3)
 
@@ -69,17 +82,17 @@ product_graph= col3.multiselect("Select the Product", options=dim4_selectbox)
 
 # Preparing DataFrame for the graph
 if len(zone_graph) != 0 and len(store_graph) != 0 and len(product_graph) != 0:
-    input_df = sales_df[sales_df["Dim1"].isin(zone_graph) & sales_df["Dim2"].isin(store_graph) & sales_df["Dim4"].isin(product_graph)]
+    input_df = sales_df_with_budget[sales_df_with_budget["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim2"].isin(store_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
 elif len(zone_graph) != 0 and len(store_graph) == 0 and len(product_graph) == 0:
-    input_df = sales_df[sales_df["Dim1"].isin(zone_graph)]
+    input_df = sales_df_with_budget[sales_df["Dim1"].isin(zone_graph)]
 elif len(zone_graph) != 0 and len(store_graph) != 0 and len(product_graph) == 0:
-    input_df = sales_df[sales_df["Dim1"].isin(zone_graph) & sales_df["Dim2"].isin(store_graph)]
+    input_df = sales_df_with_budget[sales_df_with_budget["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim2"].isin(store_graph)]
 elif len(zone_graph) == 0 and len(store_graph) != 0 and len(product_graph) != 0:
-    input_df = sales_df[sales_df["Dim2"].isin(store_graph) & sales_df["Dim4"].isin(product_graph)]
+    input_df = sales_df_with_budget[sales_df["Dim2"].isin(store_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
 elif len(zone_graph) != 0 and len(store_graph) == 0 and len(product_graph) != 0:
-    input_df = sales_df[sales_df["Dim1"].isin(zone_graph) & sales_df["Dim4"].isin(product_graph)]
+    input_df = sales_df_with_budget[sales_df["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
 else:
-    input_df = sales_df
+    input_df = sales_df_with_budget
 
 area_chart_data = input_df[['Year', 'Dim1', 'Sales_Qty']].groupby(by=['Year', 'Dim1']).sum()
 area_chart_data.sort_values(by="Year")
