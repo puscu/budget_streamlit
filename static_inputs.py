@@ -91,6 +91,7 @@ class InventedInput:
 
         df_sales = pd.DataFrame(sales_dictionary)
 
+
         return df_sales
 
 

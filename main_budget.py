@@ -1,9 +1,10 @@
 import pandas as pd
 import streamlit as st
-import altair as alt
+import plotly.express as px
 
 from static_inputs import StaticInputs, InventedInput
 from budget_calculation import BudgetGenerator
+from streamlit_utils import StreamlitUtils
 
 ### Main Page of the Budget App ###
 
@@ -30,15 +31,14 @@ from budget_calculation import BudgetGenerator
 ###
 
 input_utils = StaticInputs()
-invented_inputs = InventedInput()
+st_utils = StreamlitUtils()
 
 st.title(f"Commercial Budget {input_utils.get_current_year()}")
 st.subheader("Forecast and Strategic Initiatives")
 
 # Getting inputs
-sales_df = invented_inputs.generate_sales()
-print("Printing Sales DF")
-print(sales_df)
+sales_df = pd.read_excel("input.xlsx")
+
 sales_df['Date'] = pd.to_datetime(sales_df[['Year', 'Month']].assign(day=1))
 dim1_selectbox = input_utils.get_dim1(sales_df)
 dim2_selectbox = input_utils.get_dim2(sales_df)
@@ -70,10 +70,7 @@ budget = budget_generator.budget_generator(sales_df, selected_values, num_choice
 # Join with the original sales_df
 sales_df_with_budget = pd.concat([sales_df, budget], axis=0)
 
-print("Printing Sales with Budget")
-print(sales_df_with_budget["Year"].unique().tolist())
-
-# Create two columns
+# Create 3 columns
 col1, col2, col3 = st.columns(3)
 
 zone_graph= col1.multiselect("Select the Area", options=dim1_selectbox)
@@ -84,61 +81,52 @@ product_graph= col3.multiselect("Select the Product", options=dim4_selectbox)
 if len(zone_graph) != 0 and len(store_graph) != 0 and len(product_graph) != 0:
     input_df = sales_df_with_budget[sales_df_with_budget["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim2"].isin(store_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
 elif len(zone_graph) != 0 and len(store_graph) == 0 and len(product_graph) == 0:
-    input_df = sales_df_with_budget[sales_df["Dim1"].isin(zone_graph)]
+    input_df = sales_df_with_budget[sales_df_with_budget["Dim1"].isin(zone_graph)]
 elif len(zone_graph) != 0 and len(store_graph) != 0 and len(product_graph) == 0:
     input_df = sales_df_with_budget[sales_df_with_budget["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim2"].isin(store_graph)]
 elif len(zone_graph) == 0 and len(store_graph) != 0 and len(product_graph) != 0:
-    input_df = sales_df_with_budget[sales_df["Dim2"].isin(store_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
+    input_df = sales_df_with_budget[sales_df_with_budget["Dim2"].isin(store_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
 elif len(zone_graph) != 0 and len(store_graph) == 0 and len(product_graph) != 0:
-    input_df = sales_df_with_budget[sales_df["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
+    input_df = sales_df_with_budget[sales_df_with_budget["Dim1"].isin(zone_graph) & sales_df_with_budget["Dim4"].isin(product_graph)]
+elif len(zone_graph) == 0 and len(store_graph) == 0 and len(product_graph) != 0:
+    input_df = sales_df_with_budget[sales_df_with_budget["Dim4"].isin(product_graph)]
 else:
     input_df = sales_df_with_budget
 
-area_chart_data = input_df[['Year', 'Dim1', 'Sales_Qty']].groupby(by=['Year', 'Dim1']).sum()
+st.markdown("---")
+
+dimension = st.selectbox("Which dimension do you want to see?", options=['Zone', 'Store', 'Product'])
+if dimension == 'Zone':
+    selected_dimension = 'Dim1'
+elif dimension == 'Product':
+    selected_dimension = 'Dim4'
+else:
+    selected_dimension = 'Dim2'
+
+
+area_chart_data = input_df[['Year', selected_dimension, 'Sales_Qty']].groupby(by=['Year', selected_dimension]).sum()
 area_chart_data.sort_values(by="Year")
 area_chart_data.reset_index(inplace=True)
 area_chart_data["Year_Text"] = area_chart_data["Year"].astype(str)
 
-# Define the base time-series chart.
-def get_chart(data):
-    hover = alt.selection_single(
-        fields=["Year"],
-        nearest=True,
-        on="mouseover",
-        empty="none",
-    )
+# Create Chart
+#chart = st_utils.get_chart(area_chart_data)
+#st.altair_chart(chart.interactive(), use_container_width=True)
 
-    #.mark_line()
-    lines = (
-        alt.Chart(data, title="Evolution of Sales").mark_bar()
-        .encode(
-            x="Year_Text",
-            y="Sales_Qty",
-            color="Dim1",
-        )
-    )
+# Create bar chart with labels
+fig = px.bar(area_chart_data, x='Year_Text', y='Sales_Qty', color=selected_dimension, 
+             text=area_chart_data['Sales_Qty'].apply(lambda x: f'{x:,}'))
 
-    # Draw points on the line, and highlight based on selection
-    points = lines.transform_filter(hover).mark_circle(size=65)
+# Set layout properties
+fig.update_traces(textposition='outside')
+fig.update_layout(
+    xaxis_title='Year',
+    yaxis_title='Sales',
+    barmode='stack',
+    showlegend=True
+)
 
-    # Draw a rule at the location of the selection
-    tooltips = (
-        alt.Chart(data)
-        .mark_rule()
-        .encode(
-            #x="yearmonthdate(Date)",
-            x='Year_Text',
-            y="Sales_Qty",
-            opacity=alt.condition(hover, alt.value(0.3), alt.value(0)),
-            tooltip=[
-                alt.Tooltip("Year_Text", title="Year"),
-                alt.Tooltip("Sales_Qty", title="Sales Quantity"),
-            ],
-        )
-        .add_selection(hover)
-    )
-    return (lines + points + tooltips).interactive()
+# Display chart in Streamlit
+st.plotly_chart(fig)
 
-chart = get_chart(area_chart_data)
-
-st.altair_chart(chart.interactive(), use_container_width=True)
+st.dataframe(area_chart_data)

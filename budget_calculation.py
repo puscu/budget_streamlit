@@ -13,33 +13,54 @@ class BudgetGenerator:
     """
     def budget_generator(self, _df, _selected_values, _num_initiatives):
 
-        generated_df = pd.DataFrame()
+        generated_df = self.organic_growth(_df.copy())
+        generated_df["Year"] = 2023
 
-        if _num_initiatives == 0:
-            generated_df = _df
+        if _num_initiatives > 0:
 
-        for initiative in range(_num_initiatives):
-            zones = _selected_values[f"selected_zone{initiative+1}"]
-            stores = _selected_values[f"selected_store{initiative+1}"]
-            products = _selected_values[f"selected_product{initiative+1}"]
-            percentage = _selected_values[f"selected_percentage{initiative+1}"]
+            for initiative in range(_num_initiatives):
+                zones = _selected_values[f"selected_zone{initiative+1}"]
+                stores = _selected_values[f"selected_store{initiative+1}"]
+                products = _selected_values[f"selected_product{initiative+1}"]
+                percentage = _selected_values[f"selected_percentage{initiative+1}"]
 
-            if len(stores) != 0:
-                if len(products) != 0:
-                    generated_df = _df[(_df['Dim2'].isin(stores)) & (_df['Dim4'].isin(products))]
-                else:
-                    generated_df = _df[(_df['Dim2'].isin(stores))]
-            elif len(zones) != 0:
-                if len(products) != 0:
-                    generated_df = _df[(_df['Dim1'].isin(stores)) & (_df['Dim4'].isin(products))]
-                else:
-                    generated_df = _df[(_df['Dim1'].isin(stores))]
-            elif len(products) != 0:
-                generated_df = _df[(_df['Dim4'].isin(stores))]
-            else:
-                generated_df = _df
-
-            generated_df["Year"] = 2023
-            generated_df["Sales_Qty"] = generated_df["Sales_Qty"]*(1 + (percentage/100))
+                mask = (
+                    (generated_df['Dim1'].isin(zones) if len(zones) > 0 else True) &
+                    (generated_df['Dim2'].isin(stores) if len(stores) > 0 else True) &
+                    (generated_df['Dim4'].isin(products) if len(products) > 0 else True)
+                )
+                try:
+                    generated_df.loc[mask, "Sales_Qty"] *= (1 + (percentage / 100))
+                except:
+                    continue
 
         return generated_df
+    
+
+    def organic_growth(self, _df):
+
+        """
+        This function get as an input a DataFrame with historical sales by the 4 dimensions and Year/Month and Product
+        and needs to calculate the organic growth.
+
+        Can be calculated average sales giving more weigth to the last years and get the final df. Or making prediction via ML
+
+        The dimension of the final df needs to be len(df)/years.uniques() and refers to the current year organic growth.
+        """
+
+        # In this case to keep it simple I am going to take last year and increase by 5%.
+        organic_sales = _df[_df['Year'] == 2022]
+
+        return organic_sales
+    
+sales_input = pd.read_excel('input.xlsx')
+budget_object = BudgetGenerator()
+
+num_initiatives = 1
+selected_values = {"selected_zone1": ["Zone A"],
+                   "selected_store1": [],
+                   "selected_product1": [],
+                   "selected_percentage1": 0.5}
+
+organic_growth_df = budget_object.organic_growth(sales_input)
+print(budget_object.budget_generator(organic_growth_df, selected_values, num_initiatives))
