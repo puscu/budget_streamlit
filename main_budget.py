@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import matplotlib.pyplot as plt
 
 from static_inputs import StaticInputs, InventedInput
 from budget_calculation import BudgetGenerator
@@ -44,6 +45,7 @@ dim1_selectbox = input_utils.get_dim1(sales_df)
 dim2_selectbox = input_utils.get_dim2(sales_df)
 dim4_selectbox = input_utils.get_dim4(sales_df)
 
+### SIDEBAR ####
 # Preparing Sidebar for the Parameters of the Strategic and Commercial Initiatives
 st.sidebar.subheader("Parameters of the Strategic and Commercial Initiatives")
 num_choices = st.sidebar.slider("Select the number of Strategic and Commercial Initiatives you want to add to the budget this year", 
@@ -58,10 +60,13 @@ for i in range(num_choices):
     selected_values[f"selected_store{i+1}"] = st.sidebar.multiselect(f"Select the Store {i+1}", options=dim2_selectbox)
     selected_values[f"selected_product{i+1}"] = st.sidebar.multiselect(f"Select the Product {i+1}", options=dim4_selectbox)
     selected_values[f"selected_percentage{i+1}"] = st.sidebar.number_input(f"Choose the percentage of increase (in %) for initiative {i+1}", 
-                                                                           min_value=0.0, max_value=100.0, step=0.01)
+                                                                           min_value=-100.0, max_value=100.0, step=0.01, value=0.0)
 
     if i < num_choices - 1:
         st.sidebar.markdown("---")
+
+
+#################
 
 # Calculating Budget
 budget_generator = BudgetGenerator()
@@ -109,10 +114,6 @@ area_chart_data.sort_values(by="Year")
 area_chart_data.reset_index(inplace=True)
 area_chart_data["Year_Text"] = area_chart_data["Year"].astype(str)
 
-# Create Chart
-#chart = st_utils.get_chart(area_chart_data)
-#st.altair_chart(chart.interactive(), use_container_width=True)
-
 # Create bar chart with labels
 fig = px.bar(area_chart_data, x='Year_Text', y='Sales_Qty', color=selected_dimension, 
              text=area_chart_data['Sales_Qty'].apply(lambda x: f'{x:,}'))
@@ -126,7 +127,32 @@ fig.update_layout(
     showlegend=True
 )
 
-# Display chart in Streamlit
+# Display chart
 st.plotly_chart(fig)
 
-st.dataframe(area_chart_data)
+# Create a matrix to visualize the % variation of the budget
+
+grouped = input_df.groupby(by=[selected_dimension, 'Year'])['Sales_Qty'].sum()
+df_grouped = pd.DataFrame(grouped)
+
+min_year = df_grouped.index.get_level_values(1).min()
+
+df_sorted = df_grouped.sort_values(by=[selected_dimension, 'Year'], ascending=True)
+df_sorted['Pct_Change'] = df_sorted['Sales_Qty'].pct_change()*100
+df_sorted['Pct_Change'] = df_sorted['Pct_Change'].map('{:.2f}%'.format)
+df_sorted.loc[(slice(None), min_year), 'Pct_Change'] = 'NaN'
+
+# Pivot the dataframe and calculate percentage variation
+pivot_df = df_sorted.pivot_table(values='Pct_Change', index='Year', columns=selected_dimension, aggfunc=sum)
+
+col4, col5 = st.columns(2)
+
+col4.write(pivot_df)
+
+
+col5.write('Review all your strategies and percentage variations. If you agree with the results generate the budget. It will be generated a formatted Excel file.')
+col5.markdown('---')
+click_generate = col5.button('Generate Budget')
+
+if click_generate:
+    st.write('Budget Generated')

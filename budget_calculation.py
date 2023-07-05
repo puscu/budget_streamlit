@@ -31,6 +31,7 @@ class BudgetGenerator:
                 )
                 try:
                     generated_df.loc[mask, "Sales_Qty"] *= (1 + (percentage / 100))
+                    generated_df.loc[mask, "Sales_Qty"] = round(generated_df.loc[mask, "Sales_Qty"], 2)
                 except:
                     continue
 
@@ -52,15 +53,3 @@ class BudgetGenerator:
         organic_sales = _df[_df['Year'] == 2022]
 
         return organic_sales
-    
-sales_input = pd.read_excel('input.xlsx')
-budget_object = BudgetGenerator()
-
-num_initiatives = 1
-selected_values = {"selected_zone1": ["Zone A"],
-                   "selected_store1": [],
-                   "selected_product1": [],
-                   "selected_percentage1": 0.5}
-
-organic_growth_df = budget_object.organic_growth(sales_input)
-print(budget_object.budget_generator(organic_growth_df, selected_values, num_initiatives))
